@@ -974,6 +974,12 @@ impl ErrorType for SoftdeviceController<'_> {
 }
 
 impl<'a> Controller for SoftdeviceController<'a> {
+    type Buffer<'b> = [u8; raw::HCI_MSG_BUFFER_MAX_SIZE as usize];
+
+    fn alloc_buf(&self) -> Result<Self::Buffer<'_>, Self::Error> {
+        Ok([0u8; raw::HCI_MSG_BUFFER_MAX_SIZE as usize])
+    }
+
     async fn write_acl_data(&self, packet: &bt_hci::data::AclPacket<'_>) -> Result<(), Self::Error> {
         let mut buf = [0u8; raw::HCI_DATA_PACKET_MAX_SIZE as usize];
         packet.write_hci(buf.as_mut_slice()).map_err(|err| match err {
@@ -996,9 +1002,9 @@ impl<'a> Controller for SoftdeviceController<'a> {
         self.hci_iso_data_put(buf.as_slice())
     }
 
-    async fn read<'b>(&self, buf: &'b mut [u8]) -> Result<bt_hci::ControllerToHostPacket<'b>, Self::Error> {
-        let kind = self.hci_get(buf).await?;
-        bt_hci::ControllerToHostPacket::from_hci_bytes_with_kind(kind, buf)
+    async fn read<'b>(&self, buf: &'b mut Self::Buffer<'_>) -> Result<bt_hci::ControllerToHostPacket<'b>, Self::Error> {
+        let kind = self.hci_get(buf.as_mut_slice()).await?;
+        bt_hci::ControllerToHostPacket::from_hci_bytes_with_kind(kind, buf.as_mut_slice())
             .map(|(x, _)| x)
             .map_err(|err| match err {
                 bt_hci::FromHciBytesError::InvalidSize => Error::ENOMEM,
@@ -1008,6 +1014,12 @@ impl<'a> Controller for SoftdeviceController<'a> {
 }
 
 impl blocking::Controller for SoftdeviceController<'_> {
+    type Buffer<'b> = [u8; raw::HCI_MSG_BUFFER_MAX_SIZE as usize];
+
+    fn alloc_buf(&self) -> Result<Self::Buffer<'_>, Self::Error> {
+        Ok([0u8; raw::HCI_MSG_BUFFER_MAX_SIZE as usize])
+    }
+
     fn try_write_acl_data(&self, packet: &bt_hci::data::AclPacket<'_>) -> Result<(), blocking::TryError<Self::Error>> {
         let mut buf = [0u8; raw::HCI_DATA_PACKET_MAX_SIZE as usize];
         packet
@@ -1041,10 +1053,10 @@ impl blocking::Controller for SoftdeviceController<'_> {
 
     fn try_read<'b>(
         &self,
-        buf: &'b mut [u8],
+        buf: &'b mut Self::Buffer<'_>,
     ) -> Result<bt_hci::ControllerToHostPacket<'b>, blocking::TryError<Self::Error>> {
-        let kind = self.try_hci_get(buf).map_err(into_try_err)?;
-        bt_hci::ControllerToHostPacket::from_hci_bytes_with_kind(kind, buf)
+        let kind = self.try_hci_get(buf.as_mut_slice()).map_err(into_try_err)?;
+        bt_hci::ControllerToHostPacket::from_hci_bytes_with_kind(kind, buf.as_mut_slice())
             .map(|(x, _)| x)
             .map_err(|err| match err {
                 bt_hci::FromHciBytesError::InvalidSize => Error::ENOMEM,
@@ -1083,10 +1095,10 @@ impl blocking::Controller for SoftdeviceController<'_> {
         }
     }
 
-    fn read<'b>(&self, buf: &'b mut [u8]) -> Result<bt_hci::ControllerToHostPacket<'b>, Self::Error> {
+    fn read<'b>(&self, buf: &'b mut Self::Buffer<'_>) -> Result<bt_hci::ControllerToHostPacket<'b>, Self::Error> {
         loop {
             // Safety: the buffer can be reused after try_read has returned.
-            let buf = unsafe { core::slice::from_raw_parts_mut(buf.as_mut_ptr(), buf.len()) };
+            let buf = unsafe { &mut *(buf as *mut _) };
             match self.try_read(buf) {
                 Ok(v) => return Ok(v),
                 Err(TryError::Error(e)) => return Err(e),
