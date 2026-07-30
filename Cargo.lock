@@ -73,7 +73,7 @@ checksum = "c4512299f36f043ab09a583e57bceb5a5aab7a73db1805848e8fef3c9e8c78b3"
 [[package]]
 name = "bt-hci"
 version = "0.9.0"
-source = "git+https://github.com/embassy-rs/bt-hci?branch=main#6e63e7f484297ca86a6c2448df37b4c127fda809"
+source = "git+https://github.com/legitcamper/bt-hci?branch=cis-iso-commands#0d459b2d4d0c59ad1f9f3ceb94578a8815953d18"
 dependencies = [
  "bt-hci-driver",
  "btuuid",
@@ -89,7 +89,7 @@ dependencies = [
 [[package]]
 name = "bt-hci-driver"
 version = "0.1.0"
-source = "git+https://github.com/embassy-rs/bt-hci?branch=main#6e63e7f484297ca86a6c2448df37b4c127fda809"
+source = "git+https://github.com/legitcamper/bt-hci?branch=cis-iso-commands#0d459b2d4d0c59ad1f9f3ceb94578a8815953d18"
 dependencies = [
  "defmt 1.1.0",
  "embedded-io 0.7.1",

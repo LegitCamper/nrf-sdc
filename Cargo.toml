@@ -30,5 +30,5 @@ overflow-checks = false
 #embassy-embedded-hal = {path = "../embassy/embassy-embedded-hal"}
 
 #bt-hci = { path = "../bt-hci" }
-bt-hci = { git = "https://github.com/embassy-rs/bt-hci", branch = "main" }
-bt-hci-driver = { git = "https://github.com/embassy-rs/bt-hci", branch = "main" }
+bt-hci = { git = "https://github.com/legitcamper/bt-hci", branch = "cis-iso-commands" }
+bt-hci-driver = { git = "https://github.com/legitcamper/bt-hci", branch = "cis-iso-commands" }
