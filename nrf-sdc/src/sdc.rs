@@ -1543,6 +1543,101 @@ mod le {
     }
 }
 
+/// Bluetooth HCI LE Isochronous Channels commands (§7.8.97-100)
+mod iso {
+    use bt_hci::cmd::le::*;
+    use bt_hci::cmd::{Cmd, Error as CmdError};
+    use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
+    use bt_hci::param::ConnHandle;
+    use bt_hci::{FromHciBytes, WriteHci};
+
+    use crate::raw;
+
+    sdc_cmd!(async LeAcceptCisRequest => sdc_hci_cmd_le_accept_cis_request(x));
+    sdc_cmd!(LeRejectCisRequest => sdc_hci_cmd_le_reject_cis_request(x) -> y);
+    sdc_cmd!(LeRemoveCig => sdc_hci_cmd_le_remove_cig(x) -> y);
+    sdc_cmd!(LeRemoveIsoDataPath => sdc_hci_cmd_le_remove_iso_data_path(x) -> y);
+
+    // `LeSetCigParameters`/`LeCreateCis` carry a `CIS_Count`-length trailing array; the SDC C
+    // structs model that as a flexible array member, so their `size_of` covers only the fixed
+    // header and `sdc_cmd!`'s size-equality assertion doesn't hold. Serialize through `WriteHci`
+    // (which writes the header and both flattened CIS records contiguously, matching the C
+    // layout byte-for-byte) into a raw buffer instead, same technique as `HostNumberOfCompletedPackets` above.
+    impl<'d> ControllerCmdSync<LeSetCigParameters> for super::SoftdeviceController<'d> {
+        async fn exec(
+            &self,
+            cmd: &LeSetCigParameters,
+        ) -> Result<<LeSetCigParameters as bt_hci::cmd::SyncCmd>::Return, CmdError<nrf_mpsl::Error>> {
+            const N: usize = raw::HCI_CMD_MAX_SIZE as usize;
+            let mut buf = [0; N];
+            unwrap!(cmd.params().write_hci(buf.as_mut_slice()));
+
+            // 2-byte header (cig_id, cis_count) + 2 returned connection handles - this crate
+            // only ever requests a 2-CIS CIG (see `LeSetCigParameters`'s docs). Matches
+            // `LeSetCigParametersReturn`'s layout exactly: its `Handle = cig_id: u8;` clause makes
+            // `cig_id` the struct's first field, not an omitted one.
+            let mut out = [0u8; 6];
+            let ret =
+                unsafe { raw::sdc_hci_cmd_le_set_cig_params(buf.as_ptr() as *const _, out.as_mut_ptr() as *mut _) };
+            bt_hci::param::Status::from(ret).to_result()?;
+
+            Ok(unwrap!(LeSetCigParametersReturn::from_hci_bytes_complete(&out)))
+        }
+    }
+
+    // Same flexible-array-member situation as `LeSetCigParameters` above.
+    impl<'d> ControllerCmdSync<LeSetCigParametersTest> for super::SoftdeviceController<'d> {
+        async fn exec(
+            &self,
+            cmd: &LeSetCigParametersTest,
+        ) -> Result<<LeSetCigParametersTest as bt_hci::cmd::SyncCmd>::Return, CmdError<nrf_mpsl::Error>> {
+            const N: usize = raw::HCI_CMD_MAX_SIZE as usize;
+            let mut buf = [0; N];
+            unwrap!(cmd.params().write_hci(buf.as_mut_slice()));
+
+            // Same 2-byte header (cig_id, cis_count) + 2 returned connection handles as
+            // `LeSetCigParameters`'s return - this crate only ever requests a 2-CIS CIG.
+            let mut out = [0u8; 6];
+            let ret = unsafe {
+                raw::sdc_hci_cmd_le_set_cig_params_test(buf.as_ptr() as *const _, out.as_mut_ptr() as *mut _)
+            };
+            bt_hci::param::Status::from(ret).to_result()?;
+
+            Ok(unwrap!(LeSetCigParametersTestReturn::from_hci_bytes_complete(&out)))
+        }
+    }
+
+    impl<'d> ControllerCmdAsync<LeCreateCis> for super::SoftdeviceController<'d> {
+        async fn exec(&self, cmd: &LeCreateCis) -> Result<(), CmdError<nrf_mpsl::Error>> {
+            const N: usize = raw::HCI_CMD_MAX_SIZE as usize;
+            let mut buf = [0; N];
+            unwrap!(cmd.params().write_hci(buf.as_mut_slice()));
+
+            let ret = unsafe { raw::sdc_hci_cmd_le_create_cis(buf.as_ptr() as *const _) };
+            bt_hci::param::Status::from(ret).to_result()?;
+            Ok(())
+        }
+    }
+
+    impl<'a, 'd> ControllerCmdSync<LeSetupIsoDataPath<'a>> for super::SoftdeviceController<'d> {
+        async fn exec(
+            &self,
+            cmd: &LeSetupIsoDataPath<'a>,
+        ) -> Result<<LeSetupIsoDataPath<'a> as bt_hci::cmd::SyncCmd>::Return, CmdError<nrf_mpsl::Error>> {
+            const N: usize = raw::HCI_CMD_MAX_SIZE as usize;
+            let mut buf = [0; N];
+            unwrap!(cmd.params().write_hci(buf.as_mut_slice()));
+
+            let mut out = unsafe { core::mem::zeroed() };
+            let ret = unsafe { raw::sdc_hci_cmd_le_setup_iso_data_path(buf.as_ptr() as *const _, &mut out) };
+            bt_hci::param::Status::from(ret).to_result()?;
+            Ok(unwrap!(ConnHandle::from_hci_bytes_complete(unsafe {
+                super::bytes_of(&out)
+            })))
+        }
+    }
+}
+
 /// Bluetooth HCI vendor specific commands.
 pub mod vendor {
     #![allow(missing_docs)]
