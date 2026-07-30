@@ -1,15 +1,9 @@
 [workspace]
 resolver = "2"
-members = [
-    "examples",
-    "nrf-mpsl",
-    "nrf-mpsl-sys",
-    "nrf-sdc",
-    "nrf-sdc-sys",
-]
+members = ["examples", "nrf-mpsl", "nrf-mpsl-sys", "nrf-sdc", "nrf-sdc-sys"]
 
 [profile.dev]
-opt-level = 1               # Use slightly better optimizations.
+opt-level = 1 # Use slightly better optimizations.
 
 [profile.release]
 codegen-units = 1
@@ -30,3 +24,4 @@ overflow-checks = false
 #embassy-embedded-hal = {path = "../embassy/embassy-embedded-hal"}
 
 #bt-hci = { path = "../bt-hci" }
+bt-hci = { git = "https://github.com/legitcamper/bt-hci", branch = "cis-iso-commands" }
