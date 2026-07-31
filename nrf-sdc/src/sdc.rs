@@ -20,8 +20,8 @@ use embedded_io::ErrorType;
 use nrf_mpsl::MultiprotocolServiceLayer;
 use rand_core::CryptoRng;
 use raw::{
-    sdc_cfg_adv_buffer_cfg_t, sdc_cfg_buffer_cfg_t, sdc_cfg_buffer_count_t, sdc_cfg_role_count_t, sdc_cfg_t,
-    SDC_CFG_TYPE_NONE, SDC_DEFAULT_RESOURCE_CFG_TAG,
+    sdc_cfg_adv_buffer_cfg_t, sdc_cfg_buffer_cfg_t, sdc_cfg_buffer_count_t, sdc_cfg_iso_buffer_cfg_t,
+    sdc_cfg_role_count_t, sdc_cfg_t, SDC_CFG_TYPE_NONE, SDC_DEFAULT_RESOURCE_CFG_TAG,
 };
 
 use crate::{raw, Error, RetVal};
@@ -365,6 +365,59 @@ impl Builder {
                     rx_packet_size,
                     tx_packet_count,
                     rx_packet_count,
+                },
+            },
+        )
+    }
+
+    /// Sets the number of concurrent CIGs. Required for CIS - defaults to
+    /// `SDC_DEFAULT_CIG_COUNT` (0) if never called, which makes any `LE Create CIS` fail with
+    /// `MEMORY_CAPACITY_EXCEEDED` regardless of `support_cis_central`/`support_cis_peripheral`.
+    pub fn cig_count(self, count: u8) -> Result<Self, Error> {
+        self.cfg_set(
+            raw::SDC_CFG_TYPE_CIG_COUNT,
+            sdc_cfg_t {
+                cig_count: sdc_cfg_role_count_t { count },
+            },
+        )
+    }
+
+    /// Sets the number of concurrent CISs. Required for CIS - defaults to
+    /// `SDC_DEFAULT_CIS_COUNT` (0) if never called, which makes any `LE Create CIS` fail with
+    /// `MEMORY_CAPACITY_EXCEEDED` regardless of `support_cis_central`/`support_cis_peripheral`.
+    pub fn cis_count(self, count: u8) -> Result<Self, Error> {
+        self.cfg_set(
+            raw::SDC_CFG_TYPE_CIS_COUNT,
+            sdc_cfg_t {
+                cis_count: sdc_cfg_role_count_t { count },
+            },
+        )
+    }
+
+    /// Sets the ISO buffer configuration (shared SDU buffers plus per-stream PDU buffers).
+    /// Required for CIS/BIS - every count/size here defaults to 0 if never called, which makes
+    /// any `LE Create CIS` fail with `MEMORY_CAPACITY_EXCEEDED` regardless of
+    /// `support_cis_central`/`support_cis_peripheral`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn iso_buffer_cfg(
+        self,
+        tx_sdu_buffer_count: u8,
+        tx_sdu_buffer_size: u16,
+        tx_pdu_buffer_per_stream_count: u8,
+        rx_pdu_buffer_per_stream_count: u8,
+        rx_sdu_buffer_count: u8,
+        rx_sdu_buffer_size: u16,
+    ) -> Result<Self, Error> {
+        self.cfg_set(
+            raw::SDC_CFG_TYPE_ISO_BUFFER_CFG,
+            sdc_cfg_t {
+                iso_buffer_cfg: sdc_cfg_iso_buffer_cfg_t {
+                    tx_sdu_buffer_count,
+                    tx_sdu_buffer_size,
+                    tx_pdu_buffer_per_stream_count,
+                    rx_pdu_buffer_per_stream_count,
+                    rx_sdu_buffer_count,
+                    rx_sdu_buffer_size,
                 },
             },
         )
