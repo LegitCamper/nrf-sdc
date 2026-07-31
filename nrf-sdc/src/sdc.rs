@@ -923,6 +923,7 @@ impl<'d> SoftdeviceController<'d> {
         let kind = match msg_type {
             raw::SDC_HCI_MSG_TYPE_DATA => bt_hci::PacketKind::AclData,
             raw::SDC_HCI_MSG_TYPE_EVT => bt_hci::PacketKind::Event,
+            raw::SDC_HCI_MSG_TYPE_ISO => bt_hci::PacketKind::IsoData,
             _ => unreachable!(),
         };
 
