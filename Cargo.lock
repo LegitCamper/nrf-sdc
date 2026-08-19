@@ -73,9 +73,24 @@ checksum = "c4512299f36f043ab09a583e57bceb5a5aab7a73db1805848e8fef3c9e8c78b3"
 [[package]]
 name = "bt-hci"
 version = "0.9.0"
-source = "git+https://github.com/legitcamper/bt-hci?branch=cis-iso-commands#0d459b2d4d0c59ad1f9f3ceb94578a8815953d18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f3c66fd0a41a3b3a5906847b1bf5516048ce083e24fa9341a0fa31d3b4cd73d"
 dependencies = [
- "bt-hci-driver",
+ "btuuid",
+ "embassy-sync",
+ "embedded-io 0.7.1",
+ "embedded-io-async 0.7.0",
+ "futures-intrusive",
+ "heapless",
+]
+
+[[package]]
+name = "bt-hci"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a9670c1c3285fdaa99ade6edf5a3ed47bc14227f49b5e48cc587ef190485eaeb"
+dependencies = [
+ "bt-hci-transport",
  "btuuid",
  "defmt 1.1.0",
  "embassy-sync",
@@ -87,9 +102,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "bt-hci-driver"
+name = "bt-hci-transport"
 version = "0.1.0"
-source = "git+https://github.com/legitcamper/bt-hci?branch=cis-iso-commands#0d459b2d4d0c59ad1f9f3ceb94578a8815953d18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ffb9819c69cf88877f5eebc8c5ade0ab50f2bf9475bbb3eb714d66c55b0cb64"
 dependencies = [
  "defmt 1.1.0",
  "embedded-io 0.7.1",
@@ -941,8 +957,8 @@ dependencies = [
 name = "nrf-sdc"
 version = "0.4.0"
 dependencies = [
- "bt-hci",
- "bt-hci-driver",
+ "bt-hci 0.10.0",
+ "bt-hci-transport",
  "critical-section",
  "defmt 1.1.0",
  "embassy-nrf",
@@ -959,7 +975,7 @@ dependencies = [
 name = "nrf-sdc-examples"
 version = "0.0.0"
 dependencies = [
- "bt-hci",
+ "bt-hci 0.9.0",
  "chacha20",
  "cortex-m",
  "cortex-m-rt",
