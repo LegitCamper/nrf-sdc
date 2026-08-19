@@ -20,8 +20,8 @@ use embedded_io::ErrorType;
 use nrf_mpsl::MultiprotocolServiceLayer;
 use rand_core::CryptoRng;
 use raw::{
-    sdc_cfg_adv_buffer_cfg_t, sdc_cfg_buffer_cfg_t, sdc_cfg_buffer_count_t, sdc_cfg_role_count_t, sdc_cfg_t,
-    SDC_CFG_TYPE_NONE, SDC_DEFAULT_RESOURCE_CFG_TAG,
+    sdc_cfg_adv_buffer_cfg_t, sdc_cfg_buffer_cfg_t, sdc_cfg_buffer_count_t, sdc_cfg_iso_buffer_cfg_t,
+    sdc_cfg_role_count_t, sdc_cfg_t, SDC_CFG_TYPE_NONE, SDC_DEFAULT_RESOURCE_CFG_TAG,
 };
 
 use crate::{raw, Error, RetVal};
@@ -426,6 +426,53 @@ impl Builder {
             raw::SDC_CFG_TYPE_PERIODIC_SYNC_BUFFER_CFG,
             sdc_cfg_t {
                 periodic_sync_buffer_cfg: sdc_cfg_buffer_count_t { count },
+            },
+        )
+    }
+
+    /// Sets the number of supported CIGs.
+    pub fn cig_count(self, count: u8) -> Result<Self, Error> {
+        self.cfg_set(
+            raw::SDC_CFG_TYPE_CIG_COUNT,
+            sdc_cfg_t {
+                cig_count: sdc_cfg_role_count_t { count },
+            },
+        )
+    }
+
+    /// Sets the number of supported CIS.
+    pub fn cis_count(self, count: u8) -> Result<Self, Error> {
+        self.cfg_set(
+            raw::SDC_CFG_TYPE_CIS_COUNT,
+            sdc_cfg_t {
+                cis_count: sdc_cfg_role_count_t { count },
+            },
+        )
+    }
+
+    /// Sets the ISO buffer configuration (SDU buffers are pooled across streams, PDU buffers are
+    /// per stream).
+    #[allow(clippy::too_many_arguments)]
+    pub fn iso_buffer_cfg(
+        self,
+        tx_sdu_buffer_count: u8,
+        tx_sdu_buffer_size: u16,
+        tx_pdu_buffer_per_stream_count: u8,
+        rx_pdu_buffer_per_stream_count: u8,
+        rx_sdu_buffer_count: u8,
+        rx_sdu_buffer_size: u16,
+    ) -> Result<Self, Error> {
+        self.cfg_set(
+            raw::SDC_CFG_TYPE_ISO_BUFFER_CFG,
+            sdc_cfg_t {
+                iso_buffer_cfg: sdc_cfg_iso_buffer_cfg_t {
+                    tx_sdu_buffer_count,
+                    tx_sdu_buffer_size,
+                    tx_pdu_buffer_per_stream_count,
+                    rx_pdu_buffer_per_stream_count,
+                    rx_sdu_buffer_count,
+                    rx_sdu_buffer_size,
+                },
             },
         )
     }
@@ -1563,11 +1610,11 @@ mod iso {
     // header and `sdc_cmd!`'s size-equality assertion doesn't hold. Serialize through `WriteHci`
     // (which writes the header and both flattened CIS records contiguously, matching the C
     // layout byte-for-byte) into a raw buffer instead, same technique as `HostNumberOfCompletedPackets` above.
-    impl<'d> ControllerCmdSync<LeSetCigParameters> for super::SoftdeviceController<'d> {
+    impl<'d> ControllerCmdSync<LeSetCigParameters<'_>> for super::SoftdeviceController<'d> {
         async fn exec(
             &self,
-            cmd: &LeSetCigParameters,
-        ) -> Result<<LeSetCigParameters as bt_hci::cmd::SyncCmd>::Return, CmdError<nrf_mpsl::Error>> {
+            cmd: &LeSetCigParameters<'_>,
+        ) -> Result<<LeSetCigParameters<'_> as bt_hci::cmd::SyncCmd>::Return, CmdError<nrf_mpsl::Error>> {
             const N: usize = raw::HCI_CMD_MAX_SIZE as usize;
             let mut buf = [0; N];
             unwrap!(cmd.params().write_hci(buf.as_mut_slice()));
@@ -1586,11 +1633,11 @@ mod iso {
     }
 
     // Same flexible-array-member situation as `LeSetCigParameters` above.
-    impl<'d> ControllerCmdSync<LeSetCigParametersTest> for super::SoftdeviceController<'d> {
+    impl<'d> ControllerCmdSync<LeSetCigParametersTest<'_>> for super::SoftdeviceController<'d> {
         async fn exec(
             &self,
-            cmd: &LeSetCigParametersTest,
-        ) -> Result<<LeSetCigParametersTest as bt_hci::cmd::SyncCmd>::Return, CmdError<nrf_mpsl::Error>> {
+            cmd: &LeSetCigParametersTest<'_>,
+        ) -> Result<<LeSetCigParametersTest<'_> as bt_hci::cmd::SyncCmd>::Return, CmdError<nrf_mpsl::Error>> {
             const N: usize = raw::HCI_CMD_MAX_SIZE as usize;
             let mut buf = [0; N];
             unwrap!(cmd.params().write_hci(buf.as_mut_slice()));
@@ -1607,8 +1654,8 @@ mod iso {
         }
     }
 
-    impl<'d> ControllerCmdAsync<LeCreateCis> for super::SoftdeviceController<'d> {
-        async fn exec(&self, cmd: &LeCreateCis) -> Result<(), CmdError<nrf_mpsl::Error>> {
+    impl<'d> ControllerCmdAsync<LeCreateCis<'_>> for super::SoftdeviceController<'d> {
+        async fn exec(&self, cmd: &LeCreateCis<'_>) -> Result<(), CmdError<nrf_mpsl::Error>> {
             const N: usize = raw::HCI_CMD_MAX_SIZE as usize;
             let mut buf = [0; N];
             unwrap!(cmd.params().write_hci(buf.as_mut_slice()));
