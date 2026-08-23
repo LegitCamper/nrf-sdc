@@ -1605,6 +1605,9 @@ mod iso {
     sdc_cmd!(LeRejectCisRequest => sdc_hci_cmd_le_reject_cis_request(x) -> y);
     sdc_cmd!(LeRemoveCig => sdc_hci_cmd_le_remove_cig(x) -> y);
     sdc_cmd!(LeRemoveIsoDataPath => sdc_hci_cmd_le_remove_iso_data_path(x) -> y);
+    sdc_cmd!(async LeCreateBig => sdc_hci_cmd_le_create_big(x));
+    sdc_cmd!(async LeTerminateBig => sdc_hci_cmd_le_terminate_big(x));
+    sdc_cmd!(LeBigTerminateSync => sdc_hci_cmd_le_big_terminate_sync(x) -> y);
 
     // `LeSetCigParameters`/`LeCreateCis` carry a `CIS_Count`-length trailing array; the SDC C
     // structs model that as a flexible array member, so their `size_of` covers only the fixed
@@ -1662,6 +1665,19 @@ mod iso {
             unwrap!(cmd.params().write_hci(buf.as_mut_slice()));
 
             let ret = unsafe { raw::sdc_hci_cmd_le_create_cis(buf.as_ptr() as *const _) };
+            bt_hci::param::Status::from(ret).to_result()?;
+            Ok(())
+        }
+    }
+
+    // `LeBigCreateSync` ends in a Num_BIS-length flexible array member.
+    impl<'d> ControllerCmdAsync<LeBigCreateSync<'_>> for super::SoftdeviceController<'d> {
+        async fn exec(&self, cmd: &LeBigCreateSync<'_>) -> Result<(), CmdError<nrf_mpsl::Error>> {
+            const N: usize = raw::HCI_CMD_MAX_SIZE as usize;
+            let mut buf = [0; N];
+            unwrap!(cmd.params().write_hci(buf.as_mut_slice()));
+
+            let ret = unsafe { raw::sdc_hci_cmd_le_big_create_sync(buf.as_ptr() as *const _) };
             bt_hci::param::Status::from(ret).to_result()?;
             Ok(())
         }

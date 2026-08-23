@@ -961,7 +961,7 @@ dependencies = [
 name = "nrf-sdc-examples"
 version = "0.0.0"
 dependencies = [
- "bt-hci 0.9.0",
+ "bt-hci",
  "chacha20",
  "cortex-m",
  "cortex-m-rt",
