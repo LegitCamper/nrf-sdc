@@ -962,6 +962,13 @@ impl<'d> SoftdeviceController<'d> {
 
         let ret = unsafe { raw::sdc_hci_get(buf.as_mut_ptr(), (&mut msg_type) as *mut _ as *mut u8) };
         RetVal::from(ret).to_result()?;
+        // Failed LE CIS Established events leave all fields after Connection_Handle invalid. SDC
+        // zeroes them, while bt-hci still validates the typed PHY fields before callers can inspect
+        // Status. Supply valid placeholder PHY values so the failure reaches the event handler.
+        if msg_type == raw::SDC_HCI_MSG_TYPE_EVT && buf[0] == 0x3e && buf[2] == 0x19 && buf[3] != 0 {
+            buf[18] = 1;
+            buf[19] = 1;
+        }
         let kind = match msg_type {
             raw::SDC_HCI_MSG_TYPE_DATA => bt_hci::PacketKind::AclData,
             raw::SDC_HCI_MSG_TYPE_EVT => bt_hci::PacketKind::Event,
