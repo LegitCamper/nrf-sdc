@@ -450,6 +450,36 @@ impl Builder {
         )
     }
 
+    /// Sets the number of supported BIGs.
+    pub fn big_count(self, count: u8) -> Result<Self, Error> {
+        self.cfg_set(
+            raw::SDC_CFG_TYPE_BIG_COUNT,
+            sdc_cfg_t {
+                big_count: sdc_cfg_role_count_t { count },
+            },
+        )
+    }
+
+    /// Sets the number of supported source (transmit) BIS streams.
+    pub fn bis_source_count(self, count: u8) -> Result<Self, Error> {
+        self.cfg_set(
+            raw::SDC_CFG_TYPE_BIS_SOURCE_COUNT,
+            sdc_cfg_t {
+                bis_source_count: sdc_cfg_role_count_t { count },
+            },
+        )
+    }
+
+    /// Sets the number of supported sink (receive) BIS streams.
+    pub fn bis_sink_count(self, count: u8) -> Result<Self, Error> {
+        self.cfg_set(
+            raw::SDC_CFG_TYPE_BIS_SINK_COUNT,
+            sdc_cfg_t {
+                bis_sink_count: sdc_cfg_role_count_t { count },
+            },
+        )
+    }
+
     /// Sets the ISO buffer configuration (SDU buffers are pooled across streams, PDU buffers are
     /// per stream).
     #[allow(clippy::too_many_arguments)]
