@@ -1662,7 +1662,14 @@ mod iso {
                 unsafe { raw::sdc_hci_cmd_le_set_cig_params(buf.as_ptr() as *const _, out.as_mut_ptr() as *mut _) };
             bt_hci::param::Status::from(ret).to_result()?;
 
-            Ok(unwrap!(LeSetCigParametersReturn::from_hci_bytes_complete(&out)))
+            let mut cis_handles = [ConnHandle::new(0); 31];
+            cis_handles[0] = ConnHandle::new(u16::from_le_bytes([out[2], out[3]]));
+            cis_handles[1] = ConnHandle::new(u16::from_le_bytes([out[4], out[5]]));
+            Ok(LeSetCigParametersReturn {
+                cig_id: bt_hci::param::CigId::new(out[0]),
+                num_cis: out[1],
+                cis_handles,
+            })
         }
     }
 
@@ -1684,7 +1691,14 @@ mod iso {
             };
             bt_hci::param::Status::from(ret).to_result()?;
 
-            Ok(unwrap!(LeSetCigParametersTestReturn::from_hci_bytes_complete(&out)))
+            let mut cis_handles = [ConnHandle::new(0); 31];
+            cis_handles[0] = ConnHandle::new(u16::from_le_bytes([out[2], out[3]]));
+            cis_handles[1] = ConnHandle::new(u16::from_le_bytes([out[4], out[5]]));
+            Ok(LeSetCigParametersTestReturn {
+                cig_id: bt_hci::param::CigId::new(out[0]),
+                num_cis: out[1],
+                cis_handles,
+            })
         }
     }
 
