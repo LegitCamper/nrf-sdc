@@ -1708,7 +1708,9 @@ mod iso {
             let mut buf = [0; N];
             unwrap!(cmd.params().write_hci(buf.as_mut_slice()));
 
-            let ret = unsafe { raw::sdc_hci_cmd_le_create_cis(buf.as_ptr() as *const _) };
+            // bt-hci includes CIG_ID as a command handle, but the controller command payload and
+            // SDC C ABI start at CIS_Count. Skip the handle byte before crossing the FFI boundary.
+            let ret = unsafe { raw::sdc_hci_cmd_le_create_cis(buf[1..].as_ptr() as *const _) };
             bt_hci::param::Status::from(ret).to_result()?;
             Ok(())
         }
