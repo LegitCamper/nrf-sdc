@@ -20,8 +20,8 @@ use embedded_io::ErrorType;
 use nrf_mpsl::MultiprotocolServiceLayer;
 use rand_core::CryptoRng;
 use raw::{
-    sdc_cfg_adv_buffer_cfg_t, sdc_cfg_buffer_cfg_t, sdc_cfg_buffer_count_t, sdc_cfg_role_count_t, sdc_cfg_t,
-    SDC_CFG_TYPE_NONE, SDC_DEFAULT_RESOURCE_CFG_TAG,
+    sdc_cfg_adv_buffer_cfg_t, sdc_cfg_buffer_cfg_t, sdc_cfg_buffer_count_t, sdc_cfg_iso_buffer_cfg_t,
+    sdc_cfg_role_count_t, sdc_cfg_t, SDC_CFG_TYPE_NONE, SDC_DEFAULT_RESOURCE_CFG_TAG,
 };
 
 use crate::{raw, Error, RetVal};
@@ -426,6 +426,53 @@ impl Builder {
             raw::SDC_CFG_TYPE_PERIODIC_SYNC_BUFFER_CFG,
             sdc_cfg_t {
                 periodic_sync_buffer_cfg: sdc_cfg_buffer_count_t { count },
+            },
+        )
+    }
+
+    /// Sets the number of supported CIGs.
+    pub fn cig_count(self, count: u8) -> Result<Self, Error> {
+        self.cfg_set(
+            raw::SDC_CFG_TYPE_CIG_COUNT,
+            sdc_cfg_t {
+                cig_count: sdc_cfg_role_count_t { count },
+            },
+        )
+    }
+
+    /// Sets the number of supported CIS.
+    pub fn cis_count(self, count: u8) -> Result<Self, Error> {
+        self.cfg_set(
+            raw::SDC_CFG_TYPE_CIS_COUNT,
+            sdc_cfg_t {
+                cis_count: sdc_cfg_role_count_t { count },
+            },
+        )
+    }
+
+    /// Sets the ISO buffer configuration (SDU buffers are pooled across streams, PDU buffers are
+    /// per stream).
+    #[allow(clippy::too_many_arguments)]
+    pub fn iso_buffer_cfg(
+        self,
+        tx_sdu_buffer_count: u8,
+        tx_sdu_buffer_size: u16,
+        tx_pdu_buffer_per_stream_count: u8,
+        rx_pdu_buffer_per_stream_count: u8,
+        rx_sdu_buffer_count: u8,
+        rx_sdu_buffer_size: u16,
+    ) -> Result<Self, Error> {
+        self.cfg_set(
+            raw::SDC_CFG_TYPE_ISO_BUFFER_CFG,
+            sdc_cfg_t {
+                iso_buffer_cfg: sdc_cfg_iso_buffer_cfg_t {
+                    tx_sdu_buffer_count,
+                    tx_sdu_buffer_size,
+                    tx_pdu_buffer_per_stream_count,
+                    rx_pdu_buffer_per_stream_count,
+                    rx_sdu_buffer_count,
+                    rx_sdu_buffer_size,
+                },
             },
         )
     }
@@ -888,6 +935,7 @@ impl<'d> SoftdeviceController<'d> {
         let kind = match msg_type {
             raw::SDC_HCI_MSG_TYPE_DATA => bt_hci::PacketKind::AclData,
             raw::SDC_HCI_MSG_TYPE_EVT => bt_hci::PacketKind::Event,
+            raw::SDC_HCI_MSG_TYPE_ISO => bt_hci::PacketKind::IsoData,
             _ => unreachable!(),
         };
 
@@ -1537,6 +1585,117 @@ mod le {
 
             bt_hci::param::Status::from(ret).to_result()?;
             Ok(unwrap!(SyncHandle::from_hci_bytes_complete(unsafe {
+                super::bytes_of(&out)
+            })))
+        }
+    }
+}
+
+/// Bluetooth HCI LE Isochronous Channels commands (§7.8.97-100)
+mod iso {
+    use bt_hci::cmd::le::*;
+    use bt_hci::cmd::{Cmd, Error as CmdError};
+    use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
+    use bt_hci::param::ConnHandle;
+    use bt_hci::{FromHciBytes, WriteHci};
+
+    use crate::raw;
+
+    sdc_cmd!(async LeAcceptCisRequest => sdc_hci_cmd_le_accept_cis_request(x));
+    sdc_cmd!(LeRejectCisRequest => sdc_hci_cmd_le_reject_cis_request(x) -> y);
+    sdc_cmd!(LeRemoveCig => sdc_hci_cmd_le_remove_cig(x) -> y);
+    sdc_cmd!(LeRemoveIsoDataPath => sdc_hci_cmd_le_remove_iso_data_path(x) -> y);
+    sdc_cmd!(async LeCreateBig => sdc_hci_cmd_le_create_big(x));
+    sdc_cmd!(async LeTerminateBig => sdc_hci_cmd_le_terminate_big(x));
+    sdc_cmd!(LeBigTerminateSync => sdc_hci_cmd_le_big_terminate_sync(x) -> y);
+
+    // `LeSetCigParameters`/`LeCreateCis` carry a `CIS_Count`-length trailing array; the SDC C
+    // structs model that as a flexible array member, so their `size_of` covers only the fixed
+    // header and `sdc_cmd!`'s size-equality assertion doesn't hold. Serialize through `WriteHci`
+    // (which writes the header and both flattened CIS records contiguously, matching the C
+    // layout byte-for-byte) into a raw buffer instead, same technique as `HostNumberOfCompletedPackets` above.
+    impl<'d> ControllerCmdSync<LeSetCigParameters<'_>> for super::SoftdeviceController<'d> {
+        async fn exec(
+            &self,
+            cmd: &LeSetCigParameters<'_>,
+        ) -> Result<<LeSetCigParameters<'_> as bt_hci::cmd::SyncCmd>::Return, CmdError<nrf_mpsl::Error>> {
+            const N: usize = raw::HCI_CMD_MAX_SIZE as usize;
+            let mut buf = [0; N];
+            unwrap!(cmd.params().write_hci(buf.as_mut_slice()));
+
+            // 2-byte header (cig_id, cis_count) + 2 returned connection handles - this crate
+            // only ever requests a 2-CIS CIG (see `LeSetCigParameters`'s docs). Matches
+            // `LeSetCigParametersReturn`'s layout exactly: its `Handle = cig_id: u8;` clause makes
+            // `cig_id` the struct's first field, not an omitted one.
+            let mut out = [0u8; 6];
+            let ret =
+                unsafe { raw::sdc_hci_cmd_le_set_cig_params(buf.as_ptr() as *const _, out.as_mut_ptr() as *mut _) };
+            bt_hci::param::Status::from(ret).to_result()?;
+
+            Ok(unwrap!(LeSetCigParametersReturn::from_hci_bytes_complete(&out)))
+        }
+    }
+
+    // Same flexible-array-member situation as `LeSetCigParameters` above.
+    impl<'d> ControllerCmdSync<LeSetCigParametersTest<'_>> for super::SoftdeviceController<'d> {
+        async fn exec(
+            &self,
+            cmd: &LeSetCigParametersTest<'_>,
+        ) -> Result<<LeSetCigParametersTest<'_> as bt_hci::cmd::SyncCmd>::Return, CmdError<nrf_mpsl::Error>> {
+            const N: usize = raw::HCI_CMD_MAX_SIZE as usize;
+            let mut buf = [0; N];
+            unwrap!(cmd.params().write_hci(buf.as_mut_slice()));
+
+            // Same 2-byte header (cig_id, cis_count) + 2 returned connection handles as
+            // `LeSetCigParameters`'s return - this crate only ever requests a 2-CIS CIG.
+            let mut out = [0u8; 6];
+            let ret = unsafe {
+                raw::sdc_hci_cmd_le_set_cig_params_test(buf.as_ptr() as *const _, out.as_mut_ptr() as *mut _)
+            };
+            bt_hci::param::Status::from(ret).to_result()?;
+
+            Ok(unwrap!(LeSetCigParametersTestReturn::from_hci_bytes_complete(&out)))
+        }
+    }
+
+    impl<'d> ControllerCmdAsync<LeCreateCis<'_>> for super::SoftdeviceController<'d> {
+        async fn exec(&self, cmd: &LeCreateCis<'_>) -> Result<(), CmdError<nrf_mpsl::Error>> {
+            const N: usize = raw::HCI_CMD_MAX_SIZE as usize;
+            let mut buf = [0; N];
+            unwrap!(cmd.params().write_hci(buf.as_mut_slice()));
+
+            let ret = unsafe { raw::sdc_hci_cmd_le_create_cis(buf.as_ptr() as *const _) };
+            bt_hci::param::Status::from(ret).to_result()?;
+            Ok(())
+        }
+    }
+
+    // `LeBigCreateSync` ends in a Num_BIS-length flexible array member.
+    impl<'d> ControllerCmdAsync<LeBigCreateSync<'_>> for super::SoftdeviceController<'d> {
+        async fn exec(&self, cmd: &LeBigCreateSync<'_>) -> Result<(), CmdError<nrf_mpsl::Error>> {
+            const N: usize = raw::HCI_CMD_MAX_SIZE as usize;
+            let mut buf = [0; N];
+            unwrap!(cmd.params().write_hci(buf.as_mut_slice()));
+
+            let ret = unsafe { raw::sdc_hci_cmd_le_big_create_sync(buf.as_ptr() as *const _) };
+            bt_hci::param::Status::from(ret).to_result()?;
+            Ok(())
+        }
+    }
+
+    impl<'a, 'd> ControllerCmdSync<LeSetupIsoDataPath<'a>> for super::SoftdeviceController<'d> {
+        async fn exec(
+            &self,
+            cmd: &LeSetupIsoDataPath<'a>,
+        ) -> Result<<LeSetupIsoDataPath<'a> as bt_hci::cmd::SyncCmd>::Return, CmdError<nrf_mpsl::Error>> {
+            const N: usize = raw::HCI_CMD_MAX_SIZE as usize;
+            let mut buf = [0; N];
+            unwrap!(cmd.params().write_hci(buf.as_mut_slice()));
+
+            let mut out = unsafe { core::mem::zeroed() };
+            let ret = unsafe { raw::sdc_hci_cmd_le_setup_iso_data_path(buf.as_ptr() as *const _, &mut out) };
+            bt_hci::param::Status::from(ret).to_result()?;
+            Ok(unwrap!(ConnHandle::from_hci_bytes_complete(unsafe {
                 super::bytes_of(&out)
             })))
         }
